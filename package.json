@@ -1,0 +1,13 @@
+{
+  "name": "anglelio",
+  "version": "1.0.0",
+  "description": "Anglelio — Mission English : jeu d’apprentissage de l’anglais pour le CM1 et le CM2 (application web statique, sans compte ni publicité).",
+  "private": true,
+  "scripts": {
+    "start": "npx --yes http-server -p 8080 -c-1 .",
+    "validate": "node tools/validate.js",
+    "test:e2e": "node tools/e2e.js",
+    "test": "node tools/validate.js --quiet && node tools/e2e.js"
+  },
+  "license": "UNLICENSED"
+}

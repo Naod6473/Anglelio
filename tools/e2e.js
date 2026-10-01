@@ -53,6 +53,10 @@ function check(name, ok, detail) {
 async function newPage(browser, base, opts) {
   opts = opts || {};
   const context = await browser.newContext({ viewport: opts.viewport || { width: 1100, height: 900 }, hasTouch: !!opts.touch, isMobile: !!opts.mobile });
+  if (!opts.fakeAudio && !opts.realAudio) {
+    // Par défaut, on simule l'absence des MP3 pour que les tests ne dépendent pas des fichiers déposés
+    await context.route('**/assets/audio/*.mp3', route => route.fulfill({ status: 404, body: 'absent' }));
+  }
   if (opts.fakeAudio) {
     const wav = silentWav(2);
     await context.route('**/assets/audio/*.mp3', route => route.fulfill({ status: 200, contentType: 'audio/wav', body: wav }));
@@ -102,7 +106,7 @@ async function startMission(page, theme, mid) {
     let page = await newPage(browser, base);
     await page.waitForTimeout(800);
     const st = await page.evaluate(() => AE.audio.status());
-    check('les 8 fichiers audio absents sont détectés sans erreur bloquante', st.length === 8 && st.every(s => s.state === 'missing'), JSON.stringify(st));
+    check('fichiers audio absents (simulés) détectés sans erreur bloquante', st.length === 8 && st.every(s => s.state === 'missing'), JSON.stringify(st));
     check('aucune erreur JavaScript au chargement', page._errors.length === 0, page._errors.join(' | '));
 
     // ------------------------------------------------------------ 2. Parcours complet dans chaque niveau
@@ -196,6 +200,7 @@ async function startMission(page, theme, mid) {
     const right = await page.evaluate(() => AE.player.s.view.options.findIndex(o => o.ok));
     await page.keyboard.press(String(right + 1));
     await page.waitForSelector('#next-btn');
+    await page.waitForFunction(() => document.activeElement && document.activeElement.id === 'next-btn', null, { timeout: 2000 }).catch(() => {});
     const focused = await page.evaluate(() => document.activeElement && document.activeElement.id);
     check('touche numérique pour répondre, focus placé sur « Continuer »', focused === 'next-btn', focused);
     await page.keyboard.press('Enter');
@@ -228,11 +233,17 @@ async function startMission(page, theme, mid) {
     // Session Ultra Nightmare (chronomètre activé par défaut)
     await page.click('.tier >> nth=2');
     check('chronomètre activé par défaut en Ultra Nightmare', await page.isChecked('#doom-timer'));
+    const volMenu = await page.evaluate(() => AE.audio.volumeOf('doom'));
     await page.click('.doom-go');
     await page.waitForSelector('.q-card');
+    await page.waitForTimeout(1200);
+    const volGame = await page.evaluate(() => AE.audio.volumeOf('doom'));
+    check('musique DOOM baissée pendant une partie', volGame > 0 && volGame < volMenu * 0.5, volMenu + ' → ' + volGame);
     check('chronomètre affiché', await page.evaluate(() => /⏱/.test(document.getElementById('timer').textContent)));
     const dseen = await H.playSession(page, i => (i % 2 ? 'wrong' : 'right'));
     await page.waitForSelector('text=Corrections détaillées');
+    await page.waitForTimeout(1200);
+    check('volume rétabli à l’écran des résultats', await page.evaluate(v => Math.abs(AE.audio.volumeOf('doom') - v) < 0.02, volMenu));
     const recs = await page.evaluate(() => AE.store.get('doom.records'));
     check('session DOOM terminée (' + dseen.length + ' questions) et records séparés', dseen.length === 10 && recs && recs.total >= 10);
     const kidsAfter = await page.evaluate(() => JSON.stringify({ s: AE.progress.data().stats.answered, b: AE.progress.data().badges, w: Object.keys(AE.progress.data().words).length }));
@@ -278,7 +289,7 @@ async function startMission(page, theme, mid) {
 
     // ------------------------------------------------------------ 10. Voix
     console.log('\n10. Voix anglaises');
-    page = await newPage(browser, base, { fakeSpeech: true });
+    page = await newPage(browser, base, { fakeSpeech: true, fakeAudio: true });
     await createProfile(page, 'Dan', 1);
     await page.evaluate(() => AE.loader.allThemes().then(() => AE.player.start({ mode: 'practice', level: 2, questions: [AE.content.question('animals.cat.listen')], index: 0, results: [], sessionId: 't', intro: { words: [], expr: [], lessons: [] } })));
     await page.waitForSelector('.q-card');
@@ -286,6 +297,12 @@ async function startMission(page, theme, mid) {
     const sp = await page.evaluate(() => ({ log: window.__speech, text: document.querySelector('.q-card').innerText }));
     check('consigne d’écoute prononcée automatiquement', sp.log.spoken.includes('cat'));
     check('le mot entendu n’est pas affiché avant l’aide', !/\bcat\b/.test(sp.text.replace('Afficher le texte', '')), sp.text.slice(0, 200));
+    await page.click('.audio-row .btn >> nth=0');
+    await page.waitForTimeout(250);
+    const ducked = await page.evaluate(() => AE.audio._state.duckLevel);
+    await page.waitForTimeout(900);
+    const restored = await page.evaluate(() => AE.audio._state.duckLevel);
+    check('musique atténuée pendant un mot prononcé, puis rétablie', ducked < 0.3 && restored > 0.95, ducked + ' → ' + restored);
     await page.click('text=Afficher le texte');
     check('bouton d’aide pour révéler le texte', await page.isVisible('.q-reveal'));
     await page.click('.audio-row .btn >> nth=0');
@@ -302,7 +319,8 @@ async function startMission(page, theme, mid) {
     await startMission(page, 'colours', 'm1');
     await H.skipIntro(page);
     const overflowQ = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    await page.tap('.choice >> nth=0');
+    await page.waitForSelector('.choice');
+    await page.tap('.choice >> nth=0', { force: true });
     check('pas de défilement horizontal sur téléphone (carte et question)', overflowMap <= 0 && overflowQ <= 0, overflowMap + ' / ' + overflowQ);
     const small = await page.evaluate(() => Array.from(document.querySelectorAll('.choice, .btn')).filter(b => b.offsetParent && b.getBoundingClientRect().height < 34).length);
     check('zones tactiles suffisamment grandes', small === 0, small + ' petits boutons');

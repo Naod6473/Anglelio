@@ -53,6 +53,10 @@ function check(name, ok, detail) {
 async function newPage(browser, base, opts) {
   opts = opts || {};
   const context = await browser.newContext({ viewport: opts.viewport || { width: 1100, height: 900 }, hasTouch: !!opts.touch, isMobile: !!opts.mobile });
+  if (!opts.fakeAudio && !opts.realAudio) {
+    // Par défaut, on simule l'absence des MP3 pour que les tests ne dépendent pas des fichiers déposés
+    await context.route('**/assets/audio/*.mp3', route => route.fulfill({ status: 404, body: 'absent' }));
+  }
   if (opts.fakeAudio) {
     const wav = silentWav(2);
     await context.route('**/assets/audio/*.mp3', route => route.fulfill({ status: 200, contentType: 'audio/wav', body: wav }));
@@ -102,7 +106,7 @@ async function startMission(page, theme, mid) {
     let page = await newPage(browser, base);
     await page.waitForTimeout(800);
     const st = await page.evaluate(() => AE.audio.status());
-    check('les 8 fichiers audio absents sont détectés sans erreur bloquante', st.length === 8 && st.every(s => s.state === 'missing'), JSON.stringify(st));
+    check('fichiers audio absents (simulés) détectés sans erreur bloquante', st.length === 8 && st.every(s => s.state === 'missing'), JSON.stringify(st));
     check('aucune erreur JavaScript au chargement', page._errors.length === 0, page._errors.join(' | '));
 
     // ------------------------------------------------------------ 2. Parcours complet dans chaque niveau
@@ -196,6 +200,7 @@ async function startMission(page, theme, mid) {
     const right = await page.evaluate(() => AE.player.s.view.options.findIndex(o => o.ok));
     await page.keyboard.press(String(right + 1));
     await page.waitForSelector('#next-btn');
+    await page.waitForFunction(() => document.activeElement && document.activeElement.id === 'next-btn', null, { timeout: 2000 }).catch(() => {});
     const focused = await page.evaluate(() => document.activeElement && document.activeElement.id);
     check('touche numérique pour répondre, focus placé sur « Continuer »', focused === 'next-btn', focused);
     await page.keyboard.press('Enter');
@@ -314,7 +319,8 @@ async function startMission(page, theme, mid) {
     await startMission(page, 'colours', 'm1');
     await H.skipIntro(page);
     const overflowQ = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    await page.tap('.choice >> nth=0');
+    await page.waitForSelector('.choice');
+    await page.tap('.choice >> nth=0', { force: true });
     check('pas de défilement horizontal sur téléphone (carte et question)', overflowMap <= 0 && overflowQ <= 0, overflowMap + ' / ' + overflowQ);
     const small = await page.evaluate(() => Array.from(document.querySelectorAll('.choice, .btn')).filter(b => b.offsetParent && b.getBoundingClientRect().height < 34).length);
     check('zones tactiles suffisamment grandes', small === 0, small + ' petits boutons');

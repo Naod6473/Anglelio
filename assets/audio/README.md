@@ -17,6 +17,16 @@ L’état de chaque fichier (présent, absent, en attente d’un clic) est affic
 
 Utilisez uniquement des fichiers dont la licence autorise cet usage, et indiquez leur provenance dans `docs/CREDITS.md`.
 
+## Volume de la musique
+
+Réglages dans `js/core/config.js` (`AE.config.audio`) :
+
+- `duckFactor: 0.12` : pendant qu’un mot ou une phrase anglaise est prononcé, la musique tombe à 12 % de son volume, puis remonte en douceur.
+- `playLevel: { background: 0.7, doom: 0.3 }` : pendant une partie (séance de questions), `background.mp3` passe à 70 % et `doom.mp3` à 30 %. Le volume revient à 100 % sur les menus et l’écran de résultats. Mettre `1` pour ne pas baisser.
+- Le curseur « Musique » des réglages s’applique par-dessus ces valeurs.
+
+Conseil : préférez des musiques calmes et sans paroles, normalisées à un volume modéré, et bouclables sans coupure audible.
+
 ## Voix enregistrées (facultatif)
 
 Par défaut, les mots et phrases anglais sont prononcés par la synthèse vocale du navigateur (voix anglaise britannique de préférence). Pour utiliser des enregistrements, placez-les dans `assets/audio/voice/` et déclarez-les dans `assets/audio/voice/manifest.js` :

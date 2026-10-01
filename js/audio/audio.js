@@ -11,7 +11,7 @@
   'use strict';
   const cfg = AE.config.audio;
   const S = {
-    unlocked: false, desired: null, tracks: {}, sfxBase: {}, status: {}, ducked: false, duckLevel: 1,
+    unlocked: false, desired: null, tracks: {}, sfxBase: {}, status: {}, ducked: false, duckLevel: 1, playing: false, playLevel: 1, timers: {},
     hidden: false, lastClick: 0, active: 0, ctx: null, listeners: [], fadeTimer: null
   };
 
@@ -56,7 +56,7 @@
   function musicVolume() {
     const p = prefs();
     if (p.muted) return 0;
-    return AE.util.clamp(p.music * S.duckLevel, 0, 1);
+    return AE.util.clamp(p.music * S.duckLevel * S.playLevel, 0, 1);
   }
 
   function applyVolumes() {
@@ -174,21 +174,35 @@
     setTimeout(done, 4000);
   }
 
-  // ---------- Atténuation pendant la voix ----------
+  // ---------- Fondu progressif d'un niveau de volume (voix, partie en cours) ----------
+  function fade(key, target, ms) {
+    clearInterval(S.timers[key]);
+    const reduce = AE.settings.reducedMotion && AE.settings.reducedMotion();
+    if (reduce || !ms) { S[key] = target; applyVolumes(); return; }
+    const steps = 10, start = S[key];
+    let i = 0;
+    S.timers[key] = setInterval(() => {
+      i++;
+      S[key] = start + (target - start) * (i / steps);
+      applyVolumes();
+      if (i >= steps) clearInterval(S.timers[key]);
+    }, Math.round(ms / steps));
+  }
+
+  // Atténuation pendant une consigne ou un mot prononcé en anglais
   function duck(on) {
     S.ducked = !!on;
-    const target = on ? cfg.duckFactor : 1;
-    clearInterval(S.fadeTimer);
-    const reduce = AE.settings.reducedMotion && AE.settings.reducedMotion();
-    if (reduce) { S.duckLevel = target; applyVolumes(); return; }
-    const steps = 8, start = S.duckLevel;
-    let i = 0;
-    S.fadeTimer = setInterval(() => {
-      i++;
-      S.duckLevel = start + (target - start) * (i / steps);
-      applyVolumes();
-      if (i >= steps) clearInterval(S.fadeTimer);
-    }, Math.round(cfg.fadeMs / steps));
+    fade('duckLevel', on ? cfg.duckFactor : 1, cfg.fadeMs);
+  }
+
+  // Niveau de la musique pendant une partie (réglable par musique dans config.js)
+  function playLevelFor(name) {
+    const lv = cfg.playLevel || {};
+    return S.playing && lv[name] != null ? lv[name] : 1;
+  }
+  function setPlaying(on) {
+    S.playing = !!on;
+    fade('playLevel', playLevelFor(S.desired), cfg.playFadeMs || 800);
   }
 
   // ---------- Déverrouillage par interaction et visibilité ----------
@@ -222,7 +236,10 @@
       musicTrack('doom');
     },
     unlock,
-    setMusic(name) { S.desired = name; sync(); },
+    setMusic(name) { S.desired = name; S.playLevel = playLevelFor(name); sync(); applyVolumes(); },
+    setPlaying,
+    isPlaying: () => S.playing,
+    volumeOf: name => (S.tracks[name] ? S.tracks[name].volume : 0),
     currentMusic() {
       const n = Object.keys(S.tracks).find(k => !S.tracks[k].paused);
       return n || null;

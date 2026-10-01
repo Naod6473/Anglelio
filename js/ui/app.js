@@ -130,6 +130,9 @@
     const doom = name === 'doom' || (name === 'play' && AE.player.s && AE.player.s.doom);
     document.body.classList.toggle('doom', !!doom);
     if (!doom && AE.audio.desiredMusic() !== 'background') AE.audio.setMusic('background');
+    // Musique plus discrète pendant une partie (questions), pleine sur les menus et résultats
+    const inGame = name === 'play' && AE.player.s && AE.player.s.phase !== 'results';
+    if (inGame !== AE.audio.isPlaying()) AE.audio.setPlaying(inGame);
 
     if (name !== 'play') AE.speech.stop();
     AE.ui.close();

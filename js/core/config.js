@@ -27,6 +27,10 @@ AE.config = {
     // Enregistrements de voix facultatifs : voir assets/audio/voice/manifest.js
     voiceDir: 'assets/audio/voice/',
     duckFactor: 0.12,        // part du volume de musique conservée pendant une consigne anglaise
+    // Part du volume de musique conservée pendant une partie (séance de questions).
+    // 1 = pas de baisse. La baisse pendant la voix s'ajoute par-dessus.
+    playLevel: { background: 0.7, doom: 0.3 },
+    playFadeMs: 900,
     clickMinInterval: 90,    // ms minimum entre deux sons de clic
     maxSimultaneousSfx: 4,   // nombre maximal d'effets joués en même temps
     fadeMs: 350
